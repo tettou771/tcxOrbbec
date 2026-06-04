@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  # Build tcxOrbbec's examples on macOS / Windows / Linux (all three: the Orbbec
+  # SDK v2 is cross-platform). No tests/ dir, so examples are build-only — the
+  # right default since running needs a real camera. setup_script downloads the
+  # Orbbec SDK and points find_package(OrbbecSDK) at it via env.
+  build:
+    uses: TrussC-org/ci-actions/.github/workflows/build-addon.yml@main
+    with:
+      # tcxDepthCamera ships inside the TrussC monorepo (addons/), so cloning
+      # TrussC already provides it — no extra_addons needed. We track `dev`
+      # until the preview-Image getters (getColorImage/getDepthImage/...) the
+      # example uses land on main; switch to a pinned tag once merged.
+      trussc_ref: dev
+      setup_script: |
+        set -euo pipefail
+        SDK_TAG="v2.8.6"
+        case "$RUNNER_OS" in
+          Linux)   pat="linux_x86_64.tar.gz" ;;
+          macOS)   pat="macOS.tar.gz" ;;
+          Windows) pat="win_x64.zip" ;;
+        esac
+        api="https://api.github.com/repos/orbbec/OrbbecSDK_v2/releases/tags/${SDK_TAG}"
+        url=$(curl -sSL "$api" \
+          | grep -o '"browser_download_url": *"[^"]*"' \
+          | sed 's/.*"browser_download_url": *"//; s/"$//' \
+          | grep -i "OrbbecSDK_.*${pat}$" | grep -vi viewer | head -1)
+        echo "Orbbec SDK: $url"
+        [ -n "$url" ] || { echo "::error::could not resolve Orbbec SDK asset for $RUNNER_OS"; exit 1; }
+        mkdir -p "$GITHUB_WORKSPACE/orbbec-sdk" && cd "$GITHUB_WORKSPACE/orbbec-sdk"
+        curl -sSL -o sdk.archive "$url"
+        if [ "$RUNNER_OS" = "Windows" ]; then 7z x sdk.archive >/dev/null; else tar xzf sdk.archive; fi
+        cfg=$(find "$PWD" \( -name 'OrbbecSDKConfig.cmake' -o -iname 'orbbecsdkConfig.cmake' \) | head -1)
+        if [ -n "$cfg" ]; then
+          echo "OrbbecSDK_DIR=$(dirname "$cfg")" >> "$GITHUB_ENV"
+          echo "resolved OrbbecSDK_DIR=$(dirname "$cfg")"
+        fi
+        root=$(find "$PWD" -maxdepth 1 -type d -name 'OrbbecSDK_*' | head -1)
+        [ -n "$root" ] || root="$PWD"
+        echo "CMAKE_PREFIX_PATH=$root" >> "$GITHUB_ENV"
