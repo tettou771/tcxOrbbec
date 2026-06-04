@@ -25,10 +25,19 @@ file(GLOB ADDON_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
 
 add_library(${ADDON_NAME} STATIC ${ADDON_SOURCES} ${ADDON_HEADERS})
 
+# tcxDepthCamera is a header-only interface addon sitting next to us. Anchor its
+# path at TRUSSC_DIR (like use_addon.cmake does) rather than a path relative to
+# THIS dir: in CI the addon is symlinked into TrussC/addons/, and CMake resolves
+# the symlink to its real location, so "../tcxDepthCamera" would miss (Linux).
+if(DEFINED TRUSSC_DIR)
+    set(_TC_DEPTHCAMERA_SRC "${TRUSSC_DIR}/../addons/tcxDepthCamera/src")
+else()
+    set(_TC_DEPTHCAMERA_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../tcxDepthCamera/src")
+endif()
+
 target_include_directories(${ADDON_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    # tcxDepthCamera is a header-only interface addon sitting next to us.
-    ${CMAKE_CURRENT_SOURCE_DIR}/../tcxDepthCamera/src
+    ${_TC_DEPTHCAMERA_SRC}
 )
 
 target_link_libraries(${ADDON_NAME} PUBLIC TrussC)
