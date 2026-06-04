@@ -3,10 +3,10 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['**']   # every branch: no silent skips. Narrow to [main] only if CI is too heavy/low-value for this addon.
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main]   # mainly to cover fork PRs into main (your own branches already run via push)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
