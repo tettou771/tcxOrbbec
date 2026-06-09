@@ -5,11 +5,10 @@ implementing the [`tcxDepthCamera`](https://github.com/TrussC-org/TrussC/tree/de
 interface. Drive an Orbbec camera (Femto Bolt, Gemini 335L, Astra, …) through the
 same `DepthCamera` API as any other depth sensor.
 
-> **Status: runs on real hardware.** `example-basic` renders a live point cloud
-> from a **Gemini 335L** on macOS (via `sudo` — see [Running on macOS](#running-on-macos)).
-> Still being validated: color-format coverage (Gemini color is often MJPG/YUYV →
-> needs a FormatConvertFilter; the current code handles RGB/BGR/RGBA/BGRA), the
-> SDK point-cloud path, and Linux/Windows runs. See `TODO.md`.
+> **Status: runs on real hardware** — `example-basic` renders a live point cloud
+> from a **Gemini 335L** (macOS needs `sudo`, see below). Color-format coverage,
+> the SDK point-cloud path, and Linux/Windows runs are still being validated; see
+> `TODO.md`.
 
 ## Requirements
 
@@ -24,42 +23,16 @@ same `DepthCamera` API as any other depth sensor.
     `TODO.md`).
 - The `tcxDepthCamera` addon (this addon depends on it).
 
-## Running on macOS
-
-On macOS an Orbbec camera **only opens when the app runs as root** (`sudo`).
-Without it, the SDK fails at device open with:
-
-```
-uvc_open failed: [Path: 0-2-1.0, Return Code: -3]   (access)
-```
-
-**Why:** macOS routes every USB Video Class (UVC) device through a system daemon,
-`UVCAssistant`, which **opens the device exclusively** the moment it's detected
-(that's why your Orbbec also shows up in Photo Booth). libuvc — which the Orbbec
-SDK uses — then can't claim the interface, hence the `-3 access` error. Running
-with `sudo` **overrides the exclusive lock**, which is the only known workaround
-(see Orbbec [issue #124](https://github.com/orbbec/OrbbecSDK_v2/issues/124)).
-This is **not** specific to this addon or to the Gemini 335L: Orbbec's own samples
-(e.g. `ob_enumerate`) fail with the identical `-3`, and the Femto Bolt hits it too.
-Granting Camera permission or code-signing entitlements does **not** help — only
-root does.
+## Running on macOS — needs `sudo`
 
 ```bash
-# run with sudo
 sudo ./bin/example-basic.app/Contents/MacOS/example-basic
 ```
 
-Tips:
-- Quit any app using the camera (Photo Booth, browser tabs, video calls) first.
-- For a frictionless dev loop, add a passwordless `sudoers` entry for just your
-  binary so you don't type a password each run (`/etc/sudoers.d/…`, NOPASSWD).
-- A real **no-sudo** solution would need a root launchd helper daemon doing the
-  USB I/O and feeding frames to the unprivileged app (the proper macOS pattern),
-  or Apple relaxing `UVCAssistant`. Out of scope here; ideally handled upstream in
-  the Orbbec SDK.
-
-**Linux / Windows don't have this problem** — there the Orbbec SDK talks to the
-device through libusb directly (no `UVCAssistant`), so no `sudo` is needed.
+Otherwise you get `uvc_open ... -3 (access)`: macOS's `UVCAssistant` grabs UVC
+cameras exclusively and only root can override it ([details](https://github.com/orbbec/OrbbecSDK_v2/issues/124)).
+It's a macOS-wide limitation, not this addon (Orbbec's own samples fail the same).
+Linux and Windows don't need `sudo`.
 
 ## Usage
 
