@@ -34,12 +34,26 @@ jobs:
           Windows) pat="win_x64.zip" ;;
         esac
         api="https://api.github.com/repos/orbbec/OrbbecSDK_v2/releases/tags/${SDK_TAG}"
-        url=$(curl -sSL "$api" \
+        # Authenticate the API call: unauthenticated requests share a
+        # 60/hour-per-IP budget that macOS runners routinely exhaust (the call
+        # then returns a 403 with no assets, so url comes out empty). ci-actions
+        # exports GITHUB_TOKEN for exactly this.
+        auth=()
+        [ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+        resp=$(curl -fsSL "${auth[@]}" -H "X-GitHub-Api-Version: 2022-11-28" "$api")
+        # `|| true` so an empty match doesn't trip pipefail/set -e before we can
+        # print a diagnostic below.
+        url=$(printf '%s' "$resp" \
           | grep -o '"browser_download_url": *"[^"]*"' \
           | sed 's/.*"browser_download_url": *"//; s/"$//' \
-          | grep -i "OrbbecSDK_.*${pat}$" | grep -vi viewer | head -1)
-        echo "Orbbec SDK: $url"
-        [ -n "$url" ] || { echo "::error::could not resolve Orbbec SDK asset for $RUNNER_OS"; exit 1; }
+          | grep -i "OrbbecSDK_.*${pat}$" | grep -vi viewer | head -1 || true)
+        echo "Orbbec SDK: ${url:-<none>}"
+        if [ -z "$url" ]; then
+          echo "::error::could not resolve Orbbec SDK asset for $RUNNER_OS (pat=$pat)"
+          echo "--- API response (first 500 chars) ---"
+          printf '%s' "$resp" | head -c 500; echo
+          exit 1
+        fi
         mkdir -p "$GITHUB_WORKSPACE/orbbec-sdk" && cd "$GITHUB_WORKSPACE/orbbec-sdk"
         curl -sSL -o sdk.archive "$url"
         if [ "$RUNNER_OS" = "Windows" ]; then 7z x sdk.archive >/dev/null; else tar xzf sdk.archive; fi
