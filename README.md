@@ -35,17 +35,24 @@ the USB udev rules are installed for you, so apps run without `sudo`.
 This addon's CMake probes `/usr/local/lib` and `/usr/lib`, so both layouts are
 picked up without configuration.
 
-### macOS / Windows
+### Windows
+
+The v2 installer puts the SDK under `C:\Program Files\OrbbecSDK <version>`, and 
+this addon auto-detects that location — a standard install needs no
+`-DOrbbecSDK_DIR` flag. Installed elsewhere? Pass `-DOrbbecSDK_DIR="<sdk>/lib"`
+(the directory holding `OrbbecSDKConfig.cmake`); an explicit value always wins.
+
+### macOS
 
 Download the SDK from the
 [OrbbecSDK_v2 releases](https://github.com/orbbec/OrbbecSDK_v2/releases) and point
 CMake at its package config: `-DOrbbecSDK_DIR="<sdk>/lib"` (the directory holding
-`OrbbecSDKConfig.cmake`, which defines the `ob::OrbbecSDK` target). The SDK runtime
-shared library is bundled next to the app binary at build time.
+`OrbbecSDKConfig.cmake`, which defines the `ob::OrbbecSDK` target).
 
-The SDK's `extensions/` folder (depth engine, frame filters) is located
-automatically at runtime: the addon derives its path from the loaded
-`libOrbbecSDK` so it works whether the SDK is system-installed or bundled next to
+On every platform the SDK runtime shared library is bundled next to the app binary
+at build time, and the SDK's `extensions/` folder (depth engine, frame filters) is
+located automatically at runtime: the addon derives its path from the loaded
+`libOrbbecSDK`, so it works whether the SDK is system-installed or bundled next to
 the binary.
 
 ## Running on macOS — needs `sudo`
