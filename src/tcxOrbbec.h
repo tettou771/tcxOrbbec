@@ -51,6 +51,13 @@ public:
     // Device name reported by the SDK (e.g. "Orbbec Femto Bolt"), empty until setup().
     const std::string& getDeviceName() const { return deviceName_; }
 
+    // Telemetry from the last captured depth frame (Orbbec SDK), for diagnostics
+    // / OrbbecViewer-style readouts. Timestamps are microseconds.
+    uint64_t getFrameIndex()        const { return frameIndex_; }
+    uint64_t getDeviceTimestampUs() const { return deviceTsUs_; }
+    uint64_t getGlobalTimestampUs() const { return globalTsUs_; }  // 0 unless supported
+    uint64_t getSystemTimestampUs() const { return systemTsUs_; }
+
 protected:
     bool openDevice() override;
     void closeDevice() override;
@@ -67,6 +74,12 @@ private:
     DepthIntrinsics colorIntrinsics_{};  // color camera intrinsics (native res)
     Mat4 depthToColor_{};                // depth-cam space -> color-cam space
     bool haveColorCalib_ = false;        // colorIntrinsics_/depthToColor_ valid
+
+    // Last depth-frame telemetry (set in captureInto).
+    uint64_t frameIndex_ = 0;
+    uint64_t deviceTsUs_ = 0;
+    uint64_t globalTsUs_ = 0;
+    uint64_t systemTsUs_ = 0;
 };
 
 } // namespace tcx

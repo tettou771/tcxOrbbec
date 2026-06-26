@@ -94,6 +94,11 @@ bool Orbbec::openDevice() {
         else if (deviceName_.find("Gemini") != string::npos) sensorType_ = DepthSensorType::Stereo;
         else if (deviceName_.find("Astra") != string::npos) sensorType_ = DepthSensorType::StructuredLight;
 
+        // Global (host-clock-aligned) timestamps are off by default; enable them
+        // for the telemetry readout. Not all devices support it — ignore failures.
+        try { impl_->device->enableGlobalTimestamp(true); }
+        catch (const ob::Error&) {}
+
         impl_->pipeline = make_shared<ob::Pipeline>(impl_->device);
         impl_->config   = make_shared<ob::Config>();
 
@@ -184,6 +189,12 @@ StreamFreshness Orbbec::captureInto(DepthFrame& dst) {
         dst.depthScale = depth->getValueScale() * 0.001f;
         dst.intrinsics = depthIntrinsics_;
         dst.timestamp  = depth->getTimeStampUs() * 1e-6;
+
+        // Telemetry (diagnostics / OrbbecViewer-style readout).
+        frameIndex_ = depth->getIndex();
+        deviceTsUs_ = depth->getTimeStampUs();
+        globalTsUs_ = depth->getGlobalTimeStampUs();   // 0 unless enabled
+        systemTsUs_ = depth->getSystemTimeStampUs();
 
         const uint16_t* db = reinterpret_cast<const uint16_t*>(depth->getData());
         dst.depth.assign(db, db + static_cast<size_t>(w) * h);
