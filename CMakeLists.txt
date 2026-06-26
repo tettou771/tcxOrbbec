@@ -45,10 +45,30 @@ target_link_libraries(${ADDON_NAME} PUBLIC TrussC)
 # -----------------------------------------------------------------------------
 # Locate the Orbbec SDK v2 (libobsensor).
 # -----------------------------------------------------------------------------
+# Windows convenience: the v2 installer drops the SDK (with its CMake package
+# config) under "C:/Program Files/OrbbecSDK <version>", so Windows users don't
+# need to pass -DOrbbecSDK_DIR by hand. Auto-locate the config dir if it wasn't
+# given. (macOS — set OrbbecSDK_DIR yourself; Linux is covered by PATHS below.)
+if(WIN32 AND NOT OrbbecSDK_DIR)
+    file(GLOB _tcob_cfg_dirs
+        "C:/Program Files/OrbbecSDK*/lib"
+        "C:/Program Files/OrbbecSDK*/lib/cmake/OrbbecSDK"
+        "C:/Program Files (x86)/OrbbecSDK*/lib"
+        "C:/Program Files (x86)/OrbbecSDK*/lib/cmake/OrbbecSDK")
+    foreach(_p IN LISTS _tcob_cfg_dirs)
+        if(EXISTS "${_p}/OrbbecSDKConfig.cmake")
+            set(OrbbecSDK_DIR "${_p}")
+            message(STATUS "tcxOrbbec: auto-found Orbbec SDK config at ${OrbbecSDK_DIR}")
+            break()
+        endif()
+    endforeach()
+endif()
+
 # PATHS lets a system-wide install be found with no -DOrbbecSDK_DIR flag: the
 # Arch AUR package drops OrbbecSDKConfig.cmake under /usr/lib, and the upstream
 # .deb's postinst copies it straight into /usr/local/lib (a bare lib dir CMake
-# does not search on its own). A user-provided -DOrbbecSDK_DIR still wins.
+# does not search on its own). A user-provided -DOrbbecSDK_DIR (incl. the Windows
+# auto-locate above) still wins.
 find_package(OrbbecSDK QUIET CONFIG PATHS /usr/local/lib /usr/lib)
 
 # Resolve the imported target under whichever name the config exposes.
