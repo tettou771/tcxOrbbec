@@ -24,6 +24,10 @@ compile_commands.json
 # Generated, OS-dependent build/run scripts
 build-web.*
 
+# Orbbec SDK runtime logs (written next to the running binary at startup)
+Log/
+example*/Log/
+
 # FetchContent / downloaded deps (only when a root CMakeLists.txt fetches them)
 libs/
 
