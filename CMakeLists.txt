@@ -45,6 +45,25 @@ target_link_libraries(${ADDON_NAME} PUBLIC TrussC)
 # -----------------------------------------------------------------------------
 # Locate the Orbbec SDK v2 (libobsensor).
 # -----------------------------------------------------------------------------
+# Windows convenience: the v2 installer drops the SDK (with its CMake package
+# config) under "C:/Program Files/OrbbecSDK <version>", so Windows users don't
+# need to pass -DOrbbecSDK_DIR by hand. Auto-locate the config dir if it wasn't
+# given. (macOS/Linux are left as-is — set OrbbecSDK_DIR yourself there.)
+if(WIN32 AND NOT OrbbecSDK_DIR)
+    file(GLOB _tcob_cfg_dirs
+        "C:/Program Files/OrbbecSDK*/lib"
+        "C:/Program Files/OrbbecSDK*/lib/cmake/OrbbecSDK"
+        "C:/Program Files (x86)/OrbbecSDK*/lib"
+        "C:/Program Files (x86)/OrbbecSDK*/lib/cmake/OrbbecSDK")
+    foreach(_p IN LISTS _tcob_cfg_dirs)
+        if(EXISTS "${_p}/OrbbecSDKConfig.cmake")
+            set(OrbbecSDK_DIR "${_p}")
+            message(STATUS "tcxOrbbec: auto-found Orbbec SDK config at ${OrbbecSDK_DIR}")
+            break()
+        endif()
+    endforeach()
+endif()
+
 find_package(OrbbecSDK QUIET CONFIG)
 
 # Resolve the imported target under whichever name the config exposes.
