@@ -2,22 +2,19 @@
 // tcxOrbbec.cpp - Orbbec backend implementation (Orbbec SDK v2)
 // =============================================================================
 //
-// SCAFFOLD - NOT YET HARDWARE-VERIFIED. Written against the Orbbec SDK v2 C++
-// API (libobsensor / namespace ob) ahead of the hardware arriving. The exact
-// method names and color-format handling still need to be checked against the
-// installed SDK headers and a real Femto Bolt / Gemini 355L. See TODO.md.
+// Built on the Orbbec SDK v2 C++ API (libobsensor / namespace ob). Hardware-
+// verified on a Femto Bolt (depth 640x576 NFOV, color MJPG).
 //
 // Fills the canonical DepthFrame in captureInto(): depth (uint16 * valueScale),
 // native full-resolution color, IR, depth/color intrinsics + depth->color
-// extrinsic. World coordinates are left to the base's intrinsics deprojection
-// (an SDK point-cloud path is a follow-up).
+// extrinsic. World coordinates are left to the base's pinhole deprojection - the
+// SDK XY-table path was vertically broken on this device (see DEPROJECTION_NOTES.md).
 //
 // =============================================================================
 
 #include "tcxOrbbec.h"
 
 #include <libobsensor/ObSensor.hpp>
-#include <libobsensor/hpp/Utils.hpp>   // CoordinateTransformHelper (XY tables)
 
 #include <cstring>
 
@@ -45,13 +42,6 @@ struct Orbbec::Impl {
 
     // Converts encoded color (MJPG/YUYV/NV12/...) to RGB. Reused per frame.
     ob::FormatConvertFilter colorConv;
-
-    // SDK lens-model deprojection (XY tables). xTable/yTable alias xyTableData,
-    // so that buffer must outlive them — keep both here.
-    std::vector<float>   xyTableData;
-    OBXYTables           xyTables{};
-    bool                 xyReady = false;
-    std::vector<uint8_t> pointBuf;   // OBPoint output (w*h * sizeof(OBPoint))
 
     bool warnedColorFormat = false;
 };
@@ -146,10 +136,15 @@ bool Orbbec::openDevice() {
 
         impl_->pipeline->start(impl_->config);
 
-        // Cache depth intrinsics + distortion.
+        // Cache depth intrinsics. We deliberately do NOT copy the depth distortion:
+        // the Femto Bolt depth sensor reports rational (Brown-Conrady-K6) coefficients
+        // (e.g. k1=17.9), whose large k1..k3 are balanced by a k4..k6 denominator. The
+        // tcxDepthCamera base implements only the 3-term Brown-Conrady and drops k4..k6,
+        // so feeding it these coefficients makes the radial term diverge and warps the
+        // cloud. Left at 0, the base deprojects as a plain pinhole, which is correct and
+        // isotropic for this sensor. See DEPROJECTION_NOTES.md.
         if (impl_->depthProfile) {
             copyIntrinsics(impl_->depthProfile->getIntrinsic(), depthIntrinsics_);
-            copyDistortion(impl_->depthProfile->getDistortion(), depthIntrinsics_);
         }
         // Cache color intrinsics + depth->color extrinsic.
         if (impl_->depthProfile && impl_->colorProfile) {
@@ -221,35 +216,11 @@ StreamFreshness Orbbec::captureInto(DepthFrame& dst) {
         const uint16_t* db = reinterpret_cast<const uint16_t*>(depth->getData());
         dst.depth.assign(db, db + static_cast<size_t>(w) * h);
 
-        // SDK-exact world cloud via XY tables (TODO #3): models the full lens
-        // (incl. distortion), so the cloud matches OrbbecViewer — pinhole stretches
-        // the edges on a wide-FOV ToF camera. Fills DepthFrame.world[], which the
-        // base prefers over its own intrinsics deprojection. The tables are rebuilt
-        // only when the depth resolution changes; xTable/yTable alias xyTableData.
-        if (!impl_->xyReady ||
-            impl_->xyTables.width != w || impl_->xyTables.height != h) {
-            try {
-                OBCalibrationParam calib = impl_->pipeline->getCalibrationParam(impl_->config);
-                impl_->xyTableData.assign(static_cast<size_t>(w) * h * 2, 0.0f);
-                uint32_t bytes = static_cast<uint32_t>(impl_->xyTableData.size() * sizeof(float));
-                impl_->xyReady = ob::CoordinateTransformHelper::transformationInitXYTables(
-                    calib, OB_SENSOR_DEPTH, impl_->xyTableData.data(), &bytes, &impl_->xyTables);
-            } catch (const ob::Error&) {
-                impl_->xyReady = false;
-            }
-        }
-        if (impl_->xyReady) {
-            const size_t n = static_cast<size_t>(w) * h;
-            impl_->pointBuf.resize(n * sizeof(OBPoint));
-            ob::CoordinateTransformHelper::transformationDepthToPointCloud(
-                &impl_->xyTables, depth->getData(), impl_->pointBuf.data());
-            const OBPoint* pts = reinterpret_cast<const OBPoint*>(impl_->pointBuf.data());
-            dst.world.resize(n);
-            for (size_t i = 0; i < n; ++i)         // OBPoint mm -> meters
-                dst.world[i] = Vec3(pts[i].x * 0.001f, pts[i].y * 0.001f, pts[i].z * 0.001f);
-        } else {
-            dst.world.clear();   // fall back to the base's pinhole deprojection
-        }
+        // Leave world[] empty so the base deprojects with the cached pinhole
+        // intrinsics - correct and isotropic for this sensor. An SDK XY-table path
+        // (getCalibrationParam + transformationDepthToPointCloud) was tried but
+        // produced a vertically-broken cloud here; see DEPROJECTION_NOTES.md.
+        dst.world.clear();
         fresh.depth = true;
     }
 
