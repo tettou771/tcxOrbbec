@@ -30,10 +30,12 @@ void tcApp::update() {
 // Rebuild the point-cloud mesh from the latest frame, in display units.
 void tcApp::rebuild() {
     cloud = camera->toMesh({.colors = colored, .step = step});
-    // tcxDepthCamera world coords are in meters with +Y down, with the camera
-    // (sensor) at the origin. Scale up for the viewer and flip Y up; leaving the
-    // origin where it is keeps the camera at (0,0,0) — the orbit pivot.
-    cloud.scale(100.0f, -100.0f, 100.0f);
+    // tcxDepthCamera world coords are camera/CV space (+X right, +Y down, +Z
+    // away). Convert to GL display: scale up and flip BOTH Y and Z. Flipping only
+    // Y leaves a left-handed, depth-mirrored cloud (looks ok head-on but stretched
+    // /wrong when you orbit). Negating Z too makes it right-handed; the camera
+    // (sensor) stays at the origin as the orbit pivot. Matches ofxOrbbec's (x,-y,-z).
+    cloud.scale(100.0f, -100.0f, -100.0f);
 }
 
 void tcApp::draw() {
