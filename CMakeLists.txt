@@ -48,7 +48,7 @@ target_link_libraries(${ADDON_NAME} PUBLIC TrussC)
 # Windows convenience: the v2 installer drops the SDK (with its CMake package
 # config) under "C:/Program Files/OrbbecSDK <version>", so Windows users don't
 # need to pass -DOrbbecSDK_DIR by hand. Auto-locate the config dir if it wasn't
-# given. (macOS/Linux are left as-is — set OrbbecSDK_DIR yourself there.)
+# given. (macOS — set OrbbecSDK_DIR yourself; Linux is covered by PATHS below.)
 if(WIN32 AND NOT OrbbecSDK_DIR)
     file(GLOB _tcob_cfg_dirs
         "C:/Program Files/OrbbecSDK*/lib"
@@ -64,7 +64,12 @@ if(WIN32 AND NOT OrbbecSDK_DIR)
     endforeach()
 endif()
 
-find_package(OrbbecSDK QUIET CONFIG)
+# PATHS lets a system-wide install be found with no -DOrbbecSDK_DIR flag: the
+# Arch AUR package drops OrbbecSDKConfig.cmake under /usr/lib, and the upstream
+# .deb's postinst copies it straight into /usr/local/lib (a bare lib dir CMake
+# does not search on its own). A user-provided -DOrbbecSDK_DIR (incl. the Windows
+# auto-locate above) still wins.
+find_package(OrbbecSDK QUIET CONFIG PATHS /usr/local/lib /usr/lib)
 
 # Resolve the imported target under whichever name the config exposes.
 set(_TCOB_TARGET "")

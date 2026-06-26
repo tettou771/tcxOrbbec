@@ -21,6 +21,11 @@
 
 #include <cstring>
 
+#if defined(__linux__) || defined(__APPLE__)
+    #include <dlfcn.h>
+    #include <filesystem>
+#endif
+
 using namespace std;
 
 namespace tcx {
@@ -74,6 +79,23 @@ static void copyDistortion(const OBCameraDistortion& d, DepthIntrinsics& out) {
 // -----------------------------------------------------------------------------
 bool Orbbec::openDevice() {
     try {
+        // Point the SDK at its extensions/ folder (depth engine, frame filters).
+        // The SDK's default is the cwd-relative "./extensions", so a system-wide
+        // install or a runtime lib bundled next to the binary is missed. The
+        // extensions/ folder always sits next to libOrbbecSDK, so derive the path
+        // from the actually-loaded shared library: this covers the Arch AUR
+        // (/usr/lib), the upstream .deb (/usr/local/lib) and the bundled-binary
+        // layouts alike, with no hard-coded path. Must run before the Context.
+#if defined(__linux__) || defined(__APPLE__)
+        Dl_info dlInfo{};
+        if (dladdr(reinterpret_cast<void*>(&ob_set_extensions_directory), &dlInfo)
+                && dlInfo.dli_fname) {
+            auto ext = std::filesystem::path(dlInfo.dli_fname).parent_path() / "extensions";
+            std::error_code ec;
+            if (std::filesystem::is_directory(ext, ec))
+                ob::Context::setExtensionsDirectory(ext.string().c_str());
+        }
+#endif
         impl_->context = make_shared<ob::Context>();
         auto devList = impl_->context->queryDeviceList();
         if (!devList || devList->getCount() == 0) {
