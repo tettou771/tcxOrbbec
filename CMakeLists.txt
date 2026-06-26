@@ -45,7 +45,11 @@ target_link_libraries(${ADDON_NAME} PUBLIC TrussC)
 # -----------------------------------------------------------------------------
 # Locate the Orbbec SDK v2 (libobsensor).
 # -----------------------------------------------------------------------------
-find_package(OrbbecSDK QUIET CONFIG)
+# PATHS lets a system-wide install be found with no -DOrbbecSDK_DIR flag: the
+# Arch AUR package drops OrbbecSDKConfig.cmake under /usr/lib, and the upstream
+# .deb's postinst copies it straight into /usr/local/lib (a bare lib dir CMake
+# does not search on its own). A user-provided -DOrbbecSDK_DIR still wins.
+find_package(OrbbecSDK QUIET CONFIG PATHS /usr/local/lib /usr/lib)
 
 # Resolve the imported target under whichever name the config exposes.
 set(_TCOB_TARGET "")

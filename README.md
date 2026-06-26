@@ -15,13 +15,38 @@ same `DepthCamera` API as any other depth sensor.
 - **Orbbec SDK v2 (libobsensor)** installed. Unlike k4a, it is **cross-platform:
   Windows, Linux, and macOS** (arm64/x86_64) — so this addon can build and run on
   a Mac with a connected device.
-  - Download from [OrbbecSDK_v2 releases](https://github.com/orbbec/OrbbecSDK_v2/releases).
-  - Point CMake at its package config:
-    `-DOrbbecSDK_DIR="<sdk>/lib/cmake/OrbbecSDK"` (defines `ob::OrbbecSDK`).
-  - The SDK runtime shared library is bundled next to the app binary at build
-    time; its `extensions/` folder currently needs to be copied by hand (see
-    `TODO.md`).
 - The `tcxDepthCamera` addon (this addon depends on it).
+
+## Installing the Orbbec SDK v2
+
+### Linux
+
+On Linux the SDK is found automatically — no `-DOrbbecSDK_DIR` flag needed — and
+the USB udev rules are installed for you, so apps run without `sudo`.
+
+- **Arch:** install [`orbbecsdk-v2-bin`](https://aur.archlinux.org/packages/orbbecsdk-v2-bin)
+  from the AUR (e.g. `yay -S orbbecsdk-v2-bin`). It lands the SDK under `/usr/lib`
+  and adds a CMake redirect so `find_package(OrbbecSDK)` resolves with no flags.
+- **Ubuntu/Debian:** grab the `.deb` from the
+  [OrbbecSDK_v2 releases](https://github.com/orbbec/OrbbecSDK_v2/releases) and
+  `sudo apt install ./OrbbecSDK_v2.x.x_amd64.deb`. Its postinst copies the SDK
+  into `/usr/local/lib` + `/usr/local/include` and installs the udev rules.
+
+This addon's CMake probes `/usr/local/lib` and `/usr/lib`, so both layouts are
+picked up without configuration.
+
+### macOS / Windows
+
+Download the SDK from the
+[OrbbecSDK_v2 releases](https://github.com/orbbec/OrbbecSDK_v2/releases) and point
+CMake at its package config: `-DOrbbecSDK_DIR="<sdk>/lib"` (the directory holding
+`OrbbecSDKConfig.cmake`, which defines the `ob::OrbbecSDK` target). The SDK runtime
+shared library is bundled next to the app binary at build time.
+
+The SDK's `extensions/` folder (depth engine, frame filters) is located
+automatically at runtime: the addon derives its path from the loaded
+`libOrbbecSDK` so it works whether the SDK is system-installed or bundled next to
+the binary.
 
 ## Running on macOS — needs `sudo`
 
