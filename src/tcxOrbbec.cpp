@@ -17,6 +17,7 @@
 #include "tcxOrbbec.h"
 
 #include <libobsensor/ObSensor.hpp>
+#include <libobsensor/hpp/Utils.hpp>   // CoordinateTransformHelper (XY tables)
 
 #include <cstring>
 
@@ -36,6 +37,16 @@ struct Orbbec::Impl {
     // Active stream profiles (kept for intrinsics / extrinsics).
     shared_ptr<ob::VideoStreamProfile> depthProfile;
     shared_ptr<ob::VideoStreamProfile> colorProfile;
+
+    // Converts encoded color (MJPG/YUYV/NV12/...) to RGB. Reused per frame.
+    ob::FormatConvertFilter colorConv;
+
+    // SDK lens-model deprojection (XY tables). xTable/yTable alias xyTableData,
+    // so that buffer must outlive them — keep both here.
+    std::vector<float>   xyTableData;
+    OBXYTables           xyTables{};
+    bool                 xyReady = false;
+    std::vector<uint8_t> pointBuf;   // OBPoint output (w*h * sizeof(OBPoint))
 
     bool warnedColorFormat = false;
 };
@@ -173,10 +184,39 @@ StreamFreshness Orbbec::captureInto(DepthFrame& dst) {
         dst.depthScale = depth->getValueScale() * 0.001f;
         dst.intrinsics = depthIntrinsics_;
         dst.timestamp  = depth->getTimeStampUs() * 1e-6;
-        dst.world.clear();   // base deprojects from intrinsics
 
         const uint16_t* db = reinterpret_cast<const uint16_t*>(depth->getData());
         dst.depth.assign(db, db + static_cast<size_t>(w) * h);
+
+        // SDK-exact world cloud via XY tables (TODO #3): models the full lens
+        // (incl. distortion), so the cloud matches OrbbecViewer — pinhole stretches
+        // the edges on a wide-FOV ToF camera. Fills DepthFrame.world[], which the
+        // base prefers over its own intrinsics deprojection. The tables are rebuilt
+        // only when the depth resolution changes; xTable/yTable alias xyTableData.
+        if (!impl_->xyReady ||
+            impl_->xyTables.width != w || impl_->xyTables.height != h) {
+            try {
+                OBCalibrationParam calib = impl_->pipeline->getCalibrationParam(impl_->config);
+                impl_->xyTableData.assign(static_cast<size_t>(w) * h * 2, 0.0f);
+                uint32_t bytes = static_cast<uint32_t>(impl_->xyTableData.size() * sizeof(float));
+                impl_->xyReady = ob::CoordinateTransformHelper::transformationInitXYTables(
+                    calib, OB_SENSOR_DEPTH, impl_->xyTableData.data(), &bytes, &impl_->xyTables);
+            } catch (const ob::Error&) {
+                impl_->xyReady = false;
+            }
+        }
+        if (impl_->xyReady) {
+            const size_t n = static_cast<size_t>(w) * h;
+            impl_->pointBuf.resize(n * sizeof(OBPoint));
+            ob::CoordinateTransformHelper::transformationDepthToPointCloud(
+                &impl_->xyTables, depth->getData(), impl_->pointBuf.data());
+            const OBPoint* pts = reinterpret_cast<const OBPoint*>(impl_->pointBuf.data());
+            dst.world.resize(n);
+            for (size_t i = 0; i < n; ++i)         // OBPoint mm -> meters
+                dst.world[i] = Vec3(pts[i].x * 0.001f, pts[i].y * 0.001f, pts[i].z * 0.001f);
+        } else {
+            dst.world.clear();   // fall back to the base's pinhole deprojection
+        }
         fresh.depth = true;
     }
 
@@ -209,15 +249,42 @@ StreamFreshness Orbbec::captureInto(DepthFrame& dst) {
                 out[i*4+2] = cb[i*4+0]; out[i*4+3] = cb[i*4+3];
             }
         } else {
-            // MJPG / YUYV / etc. need an ob::FormatConvertFilter (TODO).
-            ok = false;
-            if (!impl_->warnedColorFormat) {
-                impl_->warnedColorFormat = true;
-                logWarning("tcxOrbbec")
-                    << "unsupported color format " << static_cast<int>(fmt)
-                    << "; add a FormatConvertFilter (see TODO). Color skipped.";
+            // Encoded formats (MJPG / YUYV / NV12 / Y8/Y16 / ...) -> RGB via the
+            // SDK's FormatConvertFilter, then packed to RGBA. Femto Bolt / Gemini
+            // color usually arrives as MJPG or YUYV, so this is the common path.
+            OBConvertFormat ct = FORMAT_MJPG_TO_RGB;
+            bool convertible = true;
+            switch (fmt) {
+                case OB_FORMAT_MJPG: ct = FORMAT_MJPG_TO_RGB; break;
+                case OB_FORMAT_YUYV: ct = FORMAT_YUYV_TO_RGB; break;
+                case OB_FORMAT_UYVY: ct = FORMAT_UYVY_TO_RGB; break;
+                case OB_FORMAT_NV12: ct = FORMAT_NV12_TO_RGB; break;
+                case OB_FORMAT_NV21: ct = FORMAT_NV21_TO_RGB; break;
+                case OB_FORMAT_Y16:  ct = FORMAT_Y16_TO_RGB;  break;
+                case OB_FORMAT_Y8:   ct = FORMAT_Y8_TO_RGB;   break;
+                default: convertible = false; break;
             }
-            dst.color = Pixels{};
+            shared_ptr<ob::VideoFrame> rgb;
+            if (convertible) {
+                impl_->colorConv.setFormatConvertType(ct);
+                if (auto o = impl_->colorConv.process(color)) rgb = o->as<ob::VideoFrame>();
+            }
+            if (rgb) {
+                const uint8_t* rb = reinterpret_cast<const uint8_t*>(rgb->getData());
+                for (size_t i = 0; i < n; ++i) {
+                    out[i*4+0] = rb[i*3+0]; out[i*4+1] = rb[i*3+1];
+                    out[i*4+2] = rb[i*3+2]; out[i*4+3] = 255;
+                }
+            } else {
+                ok = false;
+                if (!impl_->warnedColorFormat) {
+                    impl_->warnedColorFormat = true;
+                    logWarning("tcxOrbbec")
+                        << "unsupported color format " << static_cast<int>(fmt)
+                        << "; color skipped.";
+                }
+                dst.color = Pixels{};
+            }
         }
         if (ok) {
             if (haveColorCalib_) {
