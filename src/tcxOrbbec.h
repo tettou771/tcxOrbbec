@@ -34,11 +34,12 @@
 #include <memory>
 #include <string>
 
-namespace tcx {
+namespace tcx::orbbec {
 
 using namespace tc;
+using namespace depthcamera;   // canonical depth-camera types (DepthCamera, DepthFrame, ...)
 
-class Orbbec : public DepthCamera {
+class Orbbec : public depthcamera::DepthCamera {
 public:
     // deviceIndex selects among connected Orbbec devices (0 = first).
     explicit Orbbec(uint32_t deviceIndex = 0);
@@ -82,4 +83,14 @@ private:
     uint64_t systemTsUs_ = 0;
 };
 
-} // namespace tcx
+} // namespace tcx::orbbec
+
+// -----------------------------------------------------------------------------
+// Backward compatibility. The canonical namespace is now `tcx::orbbec`. These
+// silent aliases keep older code compiling: flat `tcx::Orbbec` and legacy
+// `trussc::Orbbec`. DEPRECATED — removed in v1.0.0. (No [[deprecated]]
+// attribute: under the usual `using namespace tc;` it would warn on idiomatic
+// unqualified use too. See tcxOrbbec README for migration.)
+// -----------------------------------------------------------------------------
+namespace tcx    { using orbbec::Orbbec; } // deprecated: remove at v1.0.0
+namespace trussc { using tcx::orbbec::Orbbec; } // deprecated: remove at v1.0.0

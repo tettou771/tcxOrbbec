@@ -25,7 +25,7 @@
 
 using namespace std;
 
-namespace tcx {
+namespace tcx::orbbec {
 
 // waitForFrames timeout before the worker re-checks running (ms).
 static constexpr int kFrameTimeoutMs = 1000;
@@ -315,4 +315,4 @@ StreamFreshness Orbbec::captureInto(DepthFrame& dst) {
     return fresh;
 }
 
-} // namespace tcx
+} // namespace tcx::orbbec

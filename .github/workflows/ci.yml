@@ -18,7 +18,7 @@ jobs:
   # right default since running needs a real camera. setup_script downloads the
   # Orbbec SDK and points find_package(OrbbecSDK) at it via env.
   build:
-    uses: TrussC-org/ci-actions/.github/workflows/build-addon.yml@main
+    uses: TrussC-org/ci-actions/.github/workflows/build-addon.yml@v1
     with:
       # tcxDepthCamera ships inside the TrussC monorepo (addons/), so cloning
       # TrussC already provides it — no extra_addons needed. We track `dev`
