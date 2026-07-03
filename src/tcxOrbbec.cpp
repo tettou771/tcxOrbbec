@@ -24,6 +24,7 @@
 #endif
 
 using namespace std;
+using namespace tc;
 
 namespace tcx::orbbec {
 
@@ -53,13 +54,13 @@ Orbbec::~Orbbec() = default;
 
 // -----------------------------------------------------------------------------
 // Copy an OBCameraIntrinsic (+ optional distortion) into our DepthIntrinsics.
-static void copyIntrinsics(const OBCameraIntrinsic& in, DepthIntrinsics& out) {
+static void copyIntrinsics(const OBCameraIntrinsic& in, depthcamera::DepthIntrinsics& out) {
     out.width  = in.width;
     out.height = in.height;
     out.fx = in.fx; out.fy = in.fy;
     out.cx = in.cx; out.cy = in.cy;
 }
-static void copyDistortion(const OBCameraDistortion& d, DepthIntrinsics& out) {
+static void copyDistortion(const OBCameraDistortion& d, depthcamera::DepthIntrinsics& out) {
     // The base undistort uses the Brown-Conrady k1..k3 / p1,p2 terms; the
     // rational k4..k6 are dropped (fine for the typically low depth distortion).
     out.k1 = d.k1; out.k2 = d.k2; out.k3 = d.k3;
@@ -102,9 +103,9 @@ bool Orbbec::openDevice() {
         // Device name -> a friendly sensor-type guess (informational only).
         auto info = impl_->device->getDeviceInfo();
         deviceName_ = info ? info->getName() : "";
-        if (deviceName_.find("Femto") != string::npos) sensorType_ = DepthSensorType::ToF;
-        else if (deviceName_.find("Gemini") != string::npos) sensorType_ = DepthSensorType::Stereo;
-        else if (deviceName_.find("Astra") != string::npos) sensorType_ = DepthSensorType::StructuredLight;
+        if (deviceName_.find("Femto") != string::npos) sensorType_ = depthcamera::DepthSensorType::ToF;
+        else if (deviceName_.find("Gemini") != string::npos) sensorType_ = depthcamera::DepthSensorType::Stereo;
+        else if (deviceName_.find("Astra") != string::npos) sensorType_ = depthcamera::DepthSensorType::StructuredLight;
 
         // Global (host-clock-aligned) timestamps are off by default; enable them
         // for the telemetry readout. Not all devices support it — ignore failures.
@@ -184,8 +185,8 @@ void Orbbec::closeDevice() {
 }
 
 // -----------------------------------------------------------------------------
-StreamFreshness Orbbec::captureInto(DepthFrame& dst) {
-    StreamFreshness fresh;
+depthcamera::StreamFreshness Orbbec::captureInto(depthcamera::DepthFrame& dst) {
+    depthcamera::StreamFreshness fresh;
     if (!impl_->pipeline) return fresh;
 
     shared_ptr<ob::FrameSet> fs;

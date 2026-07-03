@@ -36,9 +36,6 @@
 
 namespace tcx::orbbec {
 
-using namespace tc;
-using namespace depthcamera;   // canonical depth-camera types (DepthCamera, DepthFrame, ...)
-
 class Orbbec : public depthcamera::DepthCamera {
 public:
     // deviceIndex selects among connected Orbbec devices (0 = first).
@@ -47,7 +44,7 @@ public:
 
     // Detected from the device when known (Femto -> ToF, Gemini -> Stereo),
     // else Unknown. Informational only.
-    DepthSensorType getSensorType() const override { return sensorType_; }
+    depthcamera::DepthSensorType getSensorType() const override { return sensorType_; }
 
     // Device name reported by the SDK (e.g. "Orbbec Femto Bolt"), empty until setup().
     const std::string& getDeviceName() const { return deviceName_; }
@@ -62,18 +59,18 @@ public:
 protected:
     bool openDevice() override;
     void closeDevice() override;
-    StreamFreshness captureInto(DepthFrame& dst) override;
+    depthcamera::StreamFreshness captureInto(depthcamera::DepthFrame& dst) override;
 
 private:
     struct Impl;                    // hides ob:: handles
     std::unique_ptr<Impl> impl_;
     uint32_t deviceIndex_;
     std::string deviceName_;
-    DepthSensorType sensorType_ = DepthSensorType::Unknown;
+    depthcamera::DepthSensorType sensorType_ = depthcamera::DepthSensorType::Unknown;
 
-    DepthIntrinsics depthIntrinsics_{};  // cached from the depth profile in openDevice
-    DepthIntrinsics colorIntrinsics_{};  // color camera intrinsics (native res)
-    Mat4 depthToColor_{};                // depth-cam space -> color-cam space
+    depthcamera::DepthIntrinsics depthIntrinsics_{};  // cached from the depth profile in openDevice
+    depthcamera::DepthIntrinsics colorIntrinsics_{};  // color camera intrinsics (native res)
+    tc::Mat4 depthToColor_{};             // depth-cam space -> color-cam space
     bool haveColorCalib_ = false;        // colorIntrinsics_/depthToColor_ valid
 
     // Last depth-frame telemetry (set in captureInto).
