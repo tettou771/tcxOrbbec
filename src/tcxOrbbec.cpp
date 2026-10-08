@@ -50,7 +50,11 @@ struct Orbbec::Impl {
 Orbbec::Orbbec(uint32_t deviceIndex)
     : impl_(make_unique<Impl>()), deviceIndex_(deviceIndex) {}
 
-Orbbec::~Orbbec() = default;
+// Stop the grabber thread while this backend's members are still alive
+// (tcxDepthCamera: each backend destructor must call close()).
+Orbbec::~Orbbec() {
+    close();
+}
 
 // -----------------------------------------------------------------------------
 // Copy an OBCameraIntrinsic (+ optional distortion) into our DepthIntrinsics.
